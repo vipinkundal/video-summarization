@@ -1,0 +1,22 @@
+numpy>=1.17.3
+decorator>=4.4.2
+imageio>=2.5
+imageio-ffmpeg>=0.4.3
+proglog>=0.1.9
+tqdm>=4.11.2
+requests>=2.8.1
+pillow>=8.3.2
+gradio>=4.0.0
+insanely-fast-whisper
+accelerate
+bitsandbytes
+scipy
+sentencepiece
+spaces
+tiktoken
+pytest
+torch  # This will install the CPU version by default
+transformers
+yt-dlp
+langdetect
+git+https://github.com/Zulko/moviepy.git@v2.0.0.dev2
