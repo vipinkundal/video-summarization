@@ -15,7 +15,6 @@ sentencepiece
 spaces
 tiktoken
 pytest
-torch  # This will install the CPU version by default
 transformers
 yt-dlp
 langdetect

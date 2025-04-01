@@ -17,28 +17,28 @@ print("Starting the program...")
 
 model_path = "Qwen/Qwen2.5-7B-Instruct"
 
-torch.device('cpu')
+# torch.device('gpu')
 
 #FOR GPU
-# print(f"Loading model {model_path}...")
-# tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
-# model = AutoModelForCausalLM.from_pretrained(model_path, torch_dtype=torch.float16, trust_remote_code=True).cuda()
-# model = model.eval()
-# print("Model successfully loaded.")
+print(f"Loading model {model_path}...")
+tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
+model = AutoModelForCausalLM.from_pretrained(model_path, torch_dtype=torch.float16, trust_remote_code=True).cuda()
+model = model.eval()
+print("Model successfully loaded.")
 
 #FOR CPU
-print(f"Loading model {model_path}...")
+# print(f"Loading model {model_path}...")
 # Configure model loading parameters
-model_kwargs = {
-    "trust_remote_code": True,
-    "device_map": "auto",
-    "torch_dtype": torch.float32,
-    "low_cpu_mem_usage": True,
-}
-# Load tokenizer and model
-tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
-model = AutoModelForCausalLM.from_pretrained(model_path, **model_kwargs)
-model = model.eval()
+# model_kwargs = {
+#     "trust_remote_code": True,
+#     "device_map": "auto",
+#     "torch_dtype": torch.float32,
+#     "low_cpu_mem_usage": True,
+# }
+# # Load tokenizer and model
+# tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
+# model = AutoModelForCausalLM.from_pretrained(model_path, **model_kwargs)
+# model = model.eval()
 
 print("Model successfully loaded.")
 
@@ -80,7 +80,7 @@ def download_youtube_audio(url):
     
     return output_path
 
-# @spaces.GPU(duration=90)
+@spaces.GPU(duration=90)
 def transcribe_audio(file_path):
     print(f"Starting transcription of file: {file_path}")
     temp_audio = None
@@ -102,10 +102,10 @@ def transcribe_audio(file_path):
     command = [
         "insanely-fast-whisper",
         "--file-name", file_path,
-        "--device", "cpu",
+        # "--device", "cpu",
         # "--device-id", "0", #FOR GPU
-        # "--model-name", "openai/whisper-large-v3",
-        "--model-name", "openai/whisper-medium",
+        #"--model-name", "openai/whisper-large-v3",
+         "--model-name", "openai/whisper-medium",
         "--task", "transcribe",
         "--timestamp", "chunk",
         "--transcript-path", output_file
@@ -144,7 +144,7 @@ def transcribe_audio(file_path):
     
     return result
 
-# @spaces.GPU(duration=90)
+@spaces.GPU(duration=90)
 def generate_summary_stream(transcription):
     print("Starting summary generation...")
     print(f"Transcription length: {len(transcription)} characters")
@@ -157,7 +157,9 @@ def generate_summary_stream(transcription):
 
     {transcription[:300000]}..."""
     
-    response, history = model.chat(tokenizer, prompt, history=[])
+    inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
+    outputs = model.generate(**inputs, max_length=512)
+    response = tokenizer.decode(outputs[0], skip_special_tokens=True)
     print(f"Final summary generated: {response[:100]}...")
     print("Summary generation completed.")
     return response
