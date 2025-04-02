@@ -11,6 +11,7 @@ import moviepy.editor as mp
 import time
 import langdetect
 import uuid
+import re
 
 HF_TOKEN = os.environ.get("HF_TOKEN")
 print("Starting the program...")
@@ -42,7 +43,7 @@ print("Model successfully loaded.")
 
 print("Model successfully loaded.")
 
-model = model.eval()
+# model = model.eval()
 
 def generate_unique_filename(extension):
     return f"{uuid.uuid4()}{extension}"
@@ -146,23 +147,67 @@ def transcribe_audio(file_path):
 
 @spaces.GPU(duration=90)
 def generate_summary_stream(transcription):
+    """Summarizes a long transcript using chunking and improved Qwen prompting."""
     print("Starting summary generation...")
-    print(f"Transcription length: {len(transcription)} characters")
-    
-    detected_language = langdetect.detect(transcription)
-    
-    prompt = f"""Summarize the following video transcription in 150-300 words. 
-    The summary should be in the same language as the transcription, which is detected as {detected_language}.
-    Please ensure that the summary captures the main points and key ideas of the transcription:
 
-    {transcription[:300000]}..."""
-    
-    inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
-    outputs = model.generate(**inputs, max_length=512)
+    # Step 1: Split transcript into chunks with overlap
+    chunks = split_text(transcription, max_tokens=3000, overlap=100)
+    print(f"Transcription split into {len(chunks)} chunks.")
+
+    # Step 2: Generate bullet-point summaries for each chunk
+    chunk_summaries = [summarize_chunk_qwen(chunk) for chunk in chunks]
+
+    # Step 3: Summarize all chunk summaries into a final concise summary
+    final_summary = summarize_chunk_qwen("\n".join(chunk_summaries))
+
+    print("Final summary completed.")
+    return final_summary
+
+def split_text(text, max_tokens=3000, overlap=100):
+    """Splits text into overlapping chunks to prevent loss of context."""
+    sentences = re.split(r'(?<=[.!?])\s+', text)  # Split into sentences
+    chunks = []
+    current_chunk = []
+    token_count = 0
+
+    for sentence in sentences:
+        tokens = tokenizer.tokenize(sentence)
+        if token_count + len(tokens) > max_tokens:
+            chunks.append(" ".join(current_chunk))
+            current_chunk = current_chunk[-overlap:]  # Keep overlap for context
+            token_count = sum(len(tokenizer.tokenize(sent)) for sent in current_chunk)
+        
+        current_chunk.append(sentence)
+        token_count += len(tokens)
+
+    if current_chunk:
+        chunks.append(" ".join(current_chunk))
+
+    return chunks
+
+def extract_summary(response):
+    """Extracts only the content under 'Summary:' while removing everything else."""
+    match = re.search(r"Summary:\s*\n*(.*?)(?=\n\n|\Z)", response, flags=re.DOTALL)
+    return match.group(1).strip() if match else "No valid summary found."
+
+def summarize_chunk_qwen(chunk):
+    """Summarizes a single chunk using Qwen2.5 with structured prompts."""
+    prompt = f"""
+    You are an expert summarizer. Summarize the following transcript section into concise, structured bullet points, keeping only the most important ideas:
+
+    ---
+    {chunk}
+    ---
+
+    Summary:
+    """
+
+    inputs = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=4096).to(model.device)
+    outputs = model.generate(**inputs, max_new_tokens=512, do_sample=True, temperature=0.7, top_p=0.9)
     response = tokenizer.decode(outputs[0], skip_special_tokens=True)
-    print(f"Final summary generated: {response[:100]}...")
-    print("Summary generation completed.")
-    return response
+
+    return extract_summary(response)
+
 
 def process_youtube(url):
     if not url:
